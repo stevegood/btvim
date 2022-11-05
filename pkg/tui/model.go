@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/stevegood/btvim/pkg/editor"
 )
 
 var (
@@ -15,7 +16,9 @@ var (
 
 type Model struct {
 	currentPath string
+	err         error
 	textarea    textarea.Model
+	editorMode  editor.Mode
 }
 
 func (m Model) Init() tea.Cmd {
@@ -35,12 +38,23 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			// should we even do this since we want to support :q :wq :q!, etc later?
 			return m, tea.Quit
 		case "esc":
-			if m.textarea.Focused() {
-				m.textarea.Blur()
+			if m.editorMode != editor.NormalMode {
+				m.editorMode = editor.NormalMode
 			}
+		case "i":
+			if m.editorMode != editor.InsertMode {
+				m.editorMode = editor.InsertMode
+			}
+		case "up", "left", "right", "down":
+			m.textarea, cmd = m.textarea.Update(message)
+			cmds = append(cmds, cmd)
 		default:
 			if !m.textarea.Focused() {
 				cmd = m.textarea.Focus()
+				cmds = append(cmds, cmd)
+			}
+			if m.editorMode == editor.InsertMode {
+				m.textarea, cmd = m.textarea.Update(message)
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -53,8 +67,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	m.textarea, cmd = m.textarea.Update(message)
-	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
@@ -65,7 +77,14 @@ func (m Model) View() string {
 	case true:
 		b.WriteString("tree...")
 	case false:
-		b.WriteString(m.textarea.View())
+		b.WriteString(m.textarea.View() + "\n")
+	}
+
+	switch m.editorMode {
+	case editor.NormalMode:
+		b.WriteString("NORMAL")
+	case editor.InsertMode:
+		b.WriteString("INSERT")
 	}
 
 	return b.String()
@@ -92,5 +111,6 @@ func NewModel(currentPath string) Model {
 	return Model{
 		currentPath: currentPath,
 		textarea:    ti,
+		editorMode:  editor.NormalMode,
 	}
 }
