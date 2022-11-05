@@ -30,6 +30,14 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 		cmd  tea.Cmd
 	)
+
+	// handle insert mode. This needs to happen first to prevent
+	// command characters from being inserted into the buffer.
+	if m.inMode(editor.InsertMode) {
+		m.textarea, cmd = m.textarea.Update(message)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := message.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -42,24 +50,15 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.editorMode = editor.NormalMode
 			}
 		case "i":
-			if m.inMode(editor.InsertMode) {
-				m.textarea, cmd = m.textarea.Update(message)
-				cmds = append(cmds, cmd)
-			}
 			if !m.inMode(editor.InsertMode) {
 				m.editorMode = editor.InsertMode
 			}
-
 		case "up", "left", "right", "down":
 			m.textarea, cmd = m.textarea.Update(message)
 			cmds = append(cmds, cmd)
 		default:
 			if !m.textarea.Focused() {
 				cmd = m.textarea.Focus()
-				cmds = append(cmds, cmd)
-			}
-			if m.inMode(editor.InsertMode) {
-				m.textarea, cmd = m.textarea.Update(message)
 				cmds = append(cmds, cmd)
 			}
 		}
