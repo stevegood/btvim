@@ -38,13 +38,18 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			// should we even do this since we want to support :q :wq :q!, etc later?
 			return m, tea.Quit
 		case "esc":
-			if m.editorMode != editor.NormalMode {
+			if !m.inMode(editor.NormalMode) {
 				m.editorMode = editor.NormalMode
 			}
 		case "i":
-			if m.editorMode != editor.InsertMode {
+			if m.inMode(editor.InsertMode) {
+				m.textarea, cmd = m.textarea.Update(message)
+				cmds = append(cmds, cmd)
+			}
+			if !m.inMode(editor.InsertMode) {
 				m.editorMode = editor.InsertMode
 			}
+
 		case "up", "left", "right", "down":
 			m.textarea, cmd = m.textarea.Update(message)
 			cmds = append(cmds, cmd)
@@ -53,7 +58,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				cmd = m.textarea.Focus()
 				cmds = append(cmds, cmd)
 			}
-			if m.editorMode == editor.InsertMode {
+			if m.inMode(editor.InsertMode) {
 				m.textarea, cmd = m.textarea.Update(message)
 				cmds = append(cmds, cmd)
 			}
@@ -88,6 +93,10 @@ func (m Model) View() string {
 	}
 
 	return b.String()
+}
+
+func (m Model) inMode(mode editor.Mode) bool {
+	return m.editorMode == mode
 }
 
 func (m Model) isDir() bool {
