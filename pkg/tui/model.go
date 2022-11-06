@@ -15,6 +15,10 @@ var (
 	docStyle = lipgloss.NewStyle().Margin(1, 2)
 )
 
+type fileSaveMsg struct {
+	err error
+}
+
 type Model struct {
 	currentPath      string
 	err              error
@@ -126,6 +130,7 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 			switch m.commandModeInput.Value() {
 			case ":w":
 				// TODO: save the file
+				cmds = append(cmds, m.saveFile)
 				// go back to normal mode
 				m.editorMode = editor.NormalMode
 			case ":q", ":q!":
@@ -134,6 +139,7 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 				return m, tea.Quit
 			case ":wq":
 				// TODO: save the file and then quit
+				m.saveFile()
 				return m, tea.Quit
 			}
 		}
@@ -143,6 +149,13 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m Model) saveFile() tea.Msg {
+	err := os.WriteFile(m.currentPath, []byte(m.textarea.Value()), os.ModePerm)
+	return fileSaveMsg{
+		err: err,
+	}
 }
 
 func (m Model) View() string {
