@@ -1,4 +1,3 @@
 # btvim
 
-A lightweight vim clone built in Go using bubbletea.
-
+A _lightweight_ vim clone built in [Go](https://go.dev) using [bubbletea](github.com/charmbracelet/bubbletea).

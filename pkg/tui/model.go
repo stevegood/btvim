@@ -16,7 +16,7 @@ var (
 )
 
 type fileSaveMsg struct {
-	err error
+	Err error
 }
 
 type Model struct {
@@ -129,18 +129,20 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 		case "enter":
 			switch m.commandModeInput.Value() {
 			case ":w":
-				// TODO: save the file
+				// save the file
 				cmds = append(cmds, m.saveFile)
 				// go back to normal mode
 				m.editorMode = editor.NormalMode
 			case ":q", ":q!":
 				// quit
 				// TODO: prompt user to save the file changes first (if there were any changes)
-				return m, tea.Quit
+				cmds = append(cmds, tea.Quit)
 			case ":wq":
-				// TODO: save the file and then quit
-				m.saveFile()
-				return m, tea.Quit
+				// save the file and then quit
+				saveMsg := m.saveFile()
+				if saveMsg.(fileSaveMsg).Err == nil {
+					cmds = append(cmds, tea.Quit)
+				}
 			}
 		}
 	}
@@ -154,7 +156,7 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 func (m Model) saveFile() tea.Msg {
 	err := os.WriteFile(m.currentPath, []byte(m.textarea.Value()), os.ModePerm)
 	return fileSaveMsg{
-		err: err,
+		Err: err,
 	}
 }
 
