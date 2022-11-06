@@ -128,7 +128,7 @@ func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
 				// TODO: save the file
 				// go back to normal mode
 				m.editorMode = editor.NormalMode
-			case ":q":
+			case ":q", ":q!":
 				// quit
 				// TODO: prompt user to save the file changes first (if there were any changes)
 				return m, tea.Quit
