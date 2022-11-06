@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stevegood/btvim/pkg/editor"
@@ -15,14 +16,18 @@ var (
 )
 
 type Model struct {
-	currentPath string
-	err         error
-	textarea    textarea.Model
-	editorMode  editor.Mode
+	currentPath      string
+	err              error
+	textarea         textarea.Model
+	editorMode       editor.Mode
+	commandModeInput textinput.Model
 }
 
 func (m Model) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch([]tea.Cmd{
+		textarea.Blink,
+		textinput.Blink,
+	}...)
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -31,33 +36,38 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmd  tea.Cmd
 	)
 
-	// handle insert mode. This needs to happen first to prevent
-	// command characters from being inserted into the buffer.
-	if m.inMode(editor.InsertMode) {
-		m.textarea, cmd = m.textarea.Update(message)
+	switch m.editorMode {
+	case editor.NormalMode:
+		m, cmd = m.normalModeUpdate(message)
+		cmds = append(cmds, cmd)
+	case editor.InsertMode:
+		m, cmd = m.insertModeUpdate(message)
+		cmds = append(cmds, cmd)
+	case editor.CommandMode:
+		m, cmd = m.commandModeUpdate(message)
 		cmds = append(cmds, cmd)
 	}
 
 	switch msg := message.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c":
-			// TODO: prompt user to see if they want to quit?
-			// should we even do this since we want to support :q :wq :q!, etc later?
-			return m, tea.Quit
 		case "esc":
 			if !m.inMode(editor.NormalMode) {
 				m.editorMode = editor.NormalMode
 			}
 		case "i":
-			if !m.inMode(editor.InsertMode) {
+			if m.inMode(editor.NormalMode) {
 				m.editorMode = editor.InsertMode
 			}
-		case "up", "left", "right", "down":
-			m.textarea, cmd = m.textarea.Update(message)
-			cmds = append(cmds, cmd)
+		case ":":
+			if m.inMode(editor.NormalMode) {
+				m.editorMode = editor.CommandMode
+				m.commandModeInput.SetValue(":")
+				cmd = m.commandModeInput.Focus()
+				cmds = append(cmds, cmd)
+			}
 		default:
-			if !m.textarea.Focused() {
+			if !m.textarea.Focused() && !m.inMode(editor.CommandMode) {
 				cmd = m.textarea.Focus()
 				cmds = append(cmds, cmd)
 			}
@@ -70,6 +80,67 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.SetValue(m.fileContent())
 		}
 	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) normalModeUpdate(message tea.Msg) (Model, tea.Cmd) {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
+
+	switch msg := message.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "up", "left", "right", "down":
+			m.textarea, cmd = m.textarea.Update(message)
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) insertModeUpdate(message tea.Msg) (Model, tea.Cmd) {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
+	m.textarea, cmd = m.textarea.Update(message)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) commandModeUpdate(message tea.Msg) (Model, tea.Cmd) {
+	var (
+		cmds []tea.Cmd
+		cmd  tea.Cmd
+	)
+
+	switch msg := message.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			switch m.commandModeInput.Value() {
+			case ":w":
+				// TODO: save the file
+				// go back to normal mode
+				m.editorMode = editor.NormalMode
+			case ":q":
+				// quit
+				// TODO: prompt user to save the file changes first (if there were any changes)
+				return m, tea.Quit
+			case ":wq":
+				// TODO: save the file and then quit
+				return m, tea.Quit
+			}
+		}
+	}
+
+	m.commandModeInput, cmd = m.commandModeInput.Update(message)
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }
@@ -89,6 +160,9 @@ func (m Model) View() string {
 		b.WriteString("NORMAL")
 	case editor.InsertMode:
 		b.WriteString("INSERT")
+	case editor.CommandMode:
+		b.WriteString("COMMAND")
+		b.WriteString(m.commandModeInput.View())
 	}
 
 	return b.String()
@@ -116,9 +190,12 @@ func NewModel(currentPath string) Model {
 	ti := textarea.New()
 	ti.Focus()
 
+	cmdInput := textinput.New()
+
 	return Model{
-		currentPath: currentPath,
-		textarea:    ti,
-		editorMode:  editor.NormalMode,
+		currentPath:      currentPath,
+		textarea:         ti,
+		editorMode:       editor.NormalMode,
+		commandModeInput: cmdInput,
 	}
 }
